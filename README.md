@@ -9,11 +9,11 @@ They have provided a data set of historic customer records (that collected durin
 
 The details for the dataset provided below.
 
-2. Number of Instances: 220000 
+1. Number of Instances: 220000 
 
-3. Number of Variables: 16
+2. Number of Variables: 16
 
-4. Attribute information:
+3. Attribute information:
 	
   1) ID: customer identification number
   2) Gender: gender of the customer
