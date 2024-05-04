@@ -347,5 +347,3 @@ legend("bottomright",
 c("LogReg", "SVM", "Random Forest","Naives Bayes"),
 fill=c("red","blue", "green","orange"))
 ```
-
-The Cummulative Gain chart showed higher a performance for SVM model with 20% of the data SVM model could explain almost 80% of the Target Customers.
