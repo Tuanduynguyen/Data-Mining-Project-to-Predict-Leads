@@ -1,5 +1,5 @@
 # Build-predictive-models-to-predict-leads
-A project designed by Warwick Business School require students to conduct data mining on the provided data to identify a suitable approach for predicting leads (customers) who will convert and buy the new term deposit.
+A topic designed by Warwick Business School require students to conduct data mining on the provided data to identify a suitable approach for predicting leads (customers) who will convert and buy the new term deposit.
 
 World Plus provides a range of banking products, including loans, investment options, savings accounts, and credit products.
 They aim to implement a lead prediction system to pinpoint prospective customers who will buy their new term deposit product. 
