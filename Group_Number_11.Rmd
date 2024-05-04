@@ -1,0 +1,351 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+#install.packages("readme")
+#install.packages("caret")
+#install.packages("ggplot2")
+#install.packages("tidyverse")
+#install.packages("ROSE")
+#install.packages("FSelector")
+#install.packages("C50")
+#install.packages("e1071")
+#install.packages("dplyr")
+#install.packages("randomForest")
+#install.packages("pROC")
+#install.packages("performanceEstimation")
+#install.packages("CustomerScoringMetrics")
+#install.packages("mltools")
+#install.packages("data.table")
+library(mltools)
+library(data.table)
+library(pROC)
+library(FSelector) 
+library(caret)
+library(ROSE)
+library(C50)
+library(e1071)
+library(dplyr)
+library(randomForest)
+library(CustomerScoringMetrics)
+```
+
+
+Start project
+```{r}
+#1: Load the dataset
+mydata <- read.csv("assignment_data.csv",stringsAsFactors = T)
+
+```
+
+```{r}
+#2: Data Preparation
+#2.1. Check duplicated data
+duplicated_rows <- duplicated(mydata)
+mydata <- unique(mydata)
+```
+
+There are no duplicated data in the dataset.
+
+```{r}
+#2.2.Check data types
+str(mydata)
+summary(mydata)
+```
+
+After checking the structure of the data, we identified a few problems with the dataset 
+- Some nominal variables need to be one hot encoding.
+- Dependent variable has strange value of -1
+- Variable "ID" does not affect to the target variable
+- Target variable has not been changed to factor
+
+```{r}
+mydata <- one_hot(as.data.table(mydata), cols = "Occupation")
+mydata <- one_hot(as.data.table(mydata), cols = "Channel_Code")
+mydata <- mydata %>% filter(Dependent != -1)
+mydata$ID <- NULL
+mydata$Target<- as.factor(mydata$Target)
+str(mydata)
+summary(mydata)
+```
+
+```{r}
+#2.3.Check NA Values
+colSums(is.na(mydata))
+```
+
+There are 18268 NA values in the column "Credit_Product" of the dataset, which take over 8% of our dataset. We test 3 methods and see that omitting the data will be fit to our goals.
+
+```{r}
+mydata <- na.omit(mydata)
+sum(is.na(mydata))
+#mydata <- mydata %>% replace_na("No")
+#sum(is.na(mydata))
+```
+
+
+```{r}
+#2.4.Check the outliers
+#boxplot(mydata$Age)
+#boxplot(mydata$Vintage)
+#boxplot(mydata$Avg_Account_Balance)
+```
+
+There are some outliers in Vintage and Avg_Account_Balance. However, the data does make sense and not show as errors or typos so we decided to keep it there. 
+
+
+```{r}
+#4. Feature Selection
+#4.1. Information Gain
+weights <- information.gain(Target~., mydata)
+print(weights)
+weights$attr <- rownames(weights)
+weights <- arrange(weights, -attr_importance)
+barplot(weights$attr_importance, names = weights$attr, las = 2, ylim = c(0, 0.1))
+#features <- filter(weights, attr_importance > 0)$attr
+#modeling_data <- mydata[features]
+#modeling_data$Target <- mydata$Target
+```
+After performing Infomation gain we found out Resgistration, Credit_Product, Vintage, Channel_code_X1, Channel_code_X3, Region_code, Channel_code_X2 as the features which weighted the model towards the Target.
+
+```{r}
+#4.Data Partitioning
+#4.1.Set a seed as 123 
+set.seed(123)
+
+#4.2. Partition the dataset into training and test sets
+index = createDataPartition(mydata$Target, p = 0.7, list = FALSE)
+#index = createDataPartition(mydata$Target, p = 0.7, list = FALSE)
+#4.3 Generate training and test data
+training = mydata[index, ]
+test = mydata[-index, ]
+#training = mydata[index, ]
+#test = mydata[-index, ]
+#4.4.# Find proportion of target in the original dataset
+#prop.table(table(modeling_data$Target))
+prop.table(table(mydata$Target))
+#  Find proportion of target in the training set
+prop.table(table(training$Target))
+prop.table(table(test$Target))
+
+# Find proportion of target in the test set
+```
+
+The number of records belonging to no target class (90.8) is significantly higher than those belonging to the target class (9.2%). Therefore, we have to balance the dataset.
+
+```{r}
+#4.5.Data Balancing
+# Apply sampling techniques (random over sampling,random under sampling, both random over & under sampling)
+ros_data <- ovun.sample(Target~., data = training, method = "over", p=0.35, seed=1)$data
+rus_data <- ovun.sample(Target~.,data = training, method = "under", p=0.35, seed=1)$data
+table(rus_data$Target)
+prop.table(table(rus_data$Target))
+both_data <- ovun.sample(Target~.,data = training, method = "both", p=0.35, seed=1)$data
+table(both_data$Target)
+prop.table(table(both_data$Target))
+```
+
+```{r}
+#Test sampling on Logistics Regression Models
+#LogReg_unbalanced <- glm(Target~. , training, family = "binomial")
+#LogReg_pred_unbalanced <- predict(LogReg_unbalanced, test, type="response")
+#LogReg_class_unbalanced <- ifelse(LogReg_pred_unbalanced > 0.5, 1, 0)
+#LogReg_class_unbalanced <- as.factor(LogReg_class_unbalanced)
+#levels(training$Target)
+#ConfusionMatrix(LogReg_class_unbalanced, test$Target, positive = "1", mode = "prec_recall")
+#ROC_LogReg_unbalanced <- roc(test$Target, LogReg_pred_unbalanced)
+#auc(ROC_LogReg_unbalanced)
+
+#LogReg_ros <- glm(Target~. , ros_data, family = "binomial")
+#LogReg_pred_ros <- predict(LogReg_ros, test, type="response")
+#LogReg_class_ros <- ifelse(LogReg_pred_ros > 0.5, 1, 0)
+#LogReg_class_ros <- as.factor(LogReg_class_ros)
+#confusionMatrix(LogReg_class_ros, test$Target, positive = "1", mode = "prec_recall")
+#ROC_LogReg_ros <- roc(test$Target, LogReg_pred_ros)
+#auc(ROC_LogReg_ros)
+
+#LogReg_rus <- glm(Target~. , rus_data, family = "binomial")
+#LogReg_pred_rus <- predict(LogReg_rus, test, type="response")
+#LogReg_class_rus <- ifelse(LogReg_pred_rus > 0.5, 1, 0)
+#LogReg_class_rus <- as.factor(LogReg_class_rus)
+#confusionMatrix(LogReg_class_rus, test$Target, positive = "1", mode = "prec_recall")
+#ROC_LogReg_rus <- roc(test$Target, LogReg_pred_rus)
+#auc(ROC_LogReg_rus)
+
+#LogReg_both <- glm(Target~. , both_data, family = "binomial")
+#LogReg_pred_both <- predict(LogReg_both, test, type="response")
+#LogReg_class_both <- ifelse(LogReg_pred_both > 0.5, 1, 0)
+#LogReg_class_both <- as.factor(LogReg_class_both)
+#confusionMatrix(LogReg_class_both, test$Target, positive = "1", mode = "prec_recall")
+#ROC_LogReg_both <- roc(test$Target, LogReg_pred_both)
+#auc(ROC_LogReg_both)
+
+```
+
+```{r test on RF}
+#Test on Random Forest models
+#model_RF_unbalanced <- randomForest(Target~., training)
+#model_RF_ros <- randomForest(Target~., ros_data)
+#model_RF_rus <- randomForest(Target~., rus_data)
+#model_RF_both <- randomForest(Target~., both_data)
+
+#prediction_RF_unbalanced <- predict(model_RF_unbalanced, test)
+#prediction_RF_ros <- predict(model_RF_ros, test)
+#prediction_RF_rus <- predict(model_RF_rus, test)
+#prediction_RF_both <- predict(model_RF_both, test)
+
+#confusionMatrix(prediction_RF_unbalanced, test$Target, positive='1', mode = "prec_recall")
+#confusionMatrix(prediction_RF_ros, test$Target, positive='1', mode = "prec_recall")
+#confusionMatrix(prediction_RF_rus, test$Target, positive='1', mode = "prec_recall")
+#confusionMatrix(prediction_RF_both, test$Target, positive='1', mode = "prec_recall")
+#RF_prob_unbalanced<- predict(model_RF_unbalanced, test, type = "prob")
+#RF_prob_ros<- predict(model_RF_ros, test, type = "prob")
+#RF_prob_rus<- predict(model_RF_rus, test, type = "prob")
+#RF_prob_both <- predict(model_RF_both, test, type = "prob")
+#ROC_RF_unbalanced <- roc(test$Target, RF_prob_unbalanced[,2])
+#ROC_RF_ros <- roc(test$Target, RF_prob_ros[,2])
+#ROC_RF_rus <- roc(test$Target, RF_prob_rus[,2])
+#ROC_RF_both <- roc(test$Target, RF_prob_both[,2])
+#auc(ROC_RF_unbalanced)
+#auc(ROC_RF_ros)
+#auc(ROC_RF_rus)
+#auc(ROC_RF_both)
+
+```
+
+After testing 3 sampling techniques on Logistic Regression and Random Forest models, we see that applying both ROS and RUS at the same time will help us achieve the goals in increasing precision and F1 despite costing us a small accuracy of the model. 
+
+```{r decision tree}
+#5. Data modelling
+#5.1. Decision tree
+set.seed(123)
+tree_model <- C5.0(Target~., data=both_data)
+tree_predict = predict(tree_model, test, type = "class")
+confusionMatrix(tree_predict,test$Target, positive = "1",mode = "prec_recall")
+#summary(tree_model)
+```
+
+```{r svm}
+#5.2. Build SVM model and assign it to model_SVM
+set.seed(123)
+model_SVM <- svm(Target~., both_data, kernel= "radial", scale = TRUE, probability = TRUE)
+#model_SVM_linear <- svm(Target~., rus_data, kernel= "linear", scale = TRUE, probability = TRUE) 
+
+# Predict the class of the test data  
+prediction_SVM <- predict(model_SVM, test,probability = TRUE) 
+#prediction_SVM1 <- predict(model_SVM_linear, test) 
+
+# Use confusionMatrix to print the performance of SVM model 
+confusionMatrix(prediction_SVM,test$Target,positive = "1",mode = "prec_recall")
+#confusionMatrix(prediction_SVM1, test$Target, positive = "1", mode = "prec_recall") 
+#summary(model_SVM)
+#summary(model_SVM_linear)
+```
+
+```{r}
+#5.3. Naive Bayes model
+set.seed(123)
+nb_model <- naiveBayes(Target~.,both_data)
+nb_predict <- predict(nb_model,test, type = "class")
+confusionMatrix(nb_predict, test$Target, positive='1', mode = "prec_recall")
+#summary(nb_model)
+```
+
+```{r random forest}
+#5.4.Random Forest model
+set.seed(123)
+RF_model <- randomForest(Target~., both_data)
+RF_model_prediction <- predict(RF_model, test)
+confusionMatrix(RF_model_prediction, test$Target, positive='1', mode = "prec_recall")
+#varImpPlot(RF_model)
+```
+
+```{r}
+#5.5 Logistics Regression
+set.seed(123)
+LogReg_model <- glm(Target~. , both_data, family = "binomial")
+LogReg_pred_model <- predict(LogReg_model, test, type="response")
+LogReg_class_model <- ifelse(LogReg_pred_model > 0.5, 1, 0)
+LogReg_class_model <- as.factor(LogReg_class_model)
+confusionMatrix(LogReg_class_model, test$Target, positive = "1", mode = "prec_recall")
+#summary(LogReg_model)
+```
+
+```{r}
+#6.Data Evaluation
+nb_prob <- predict(nb_model, test, type = "raw")
+
+RF_prob <- predict(RF_model, test, type = "prob")
+
+SVMpred <- predict(model_SVM, test, probability = TRUE)
+SVM_prob <- attr(SVMpred, "probabilities")
+
+tree_prob <- predict(tree_model, test, type = "prob")
+
+# Obtain the ROC curve data for logistic regression
+ROC_LogReg <- roc(test$Target, LogReg_pred_model)
+
+# SVM
+ROC_SVM <- roc(test$Target, SVM_prob[,2])
+
+# Random Forest
+ROC_RF <- roc(test$Target, RF_prob[,2])
+
+#Naives Bayes
+ROC_nb <- roc(test$Target, nb_prob[,2])
+
+# Decision Tree
+ROC_DT <- roc(test$Target, tree_prob[, 2])
+
+# Plot the ROC curve for Logistic Regression, SVM and Random Forest
+pROC::ggroc(list(LogReg = ROC_LogReg, SVM = ROC_SVM, RF = ROC_RF, NB = ROC_nb,DT = ROC_DT), legacy.axes=TRUE)+ xlab("FPR") + ylab("TPR") +
+   geom_abline(intercept = 0, slope = 1, color = "darkgrey", linetype = "dashed")
+```
+The ROC curve for RF model was highest with 87.84% area under the curve. SVM model covered 86.16% of the area.
+
+```{r}
+#Calculate the area under the curve (AUC) for Logistic Regression 
+auc(ROC_LogReg)
+
+#Calculate the area under the curve (AUC) for SVM 
+auc(ROC_SVM)
+
+#Calculate the area under the curve (AUC) for Random Forest 
+auc(ROC_RF)
+
+#Calculate the area under the curve (AUC) for Naives Bayes 
+auc(ROC_nb)
+
+#Calculate the area under the curve (AUC) for Decision Tree
+auc(ROC_DT)
+
+```
+
+```{r}
+GainTable_nb <- cumGainsTable(nb_prob[,2], test$Target, resolution = 1/100)
+
+GainTable_LogReg <- cumGainsTable(LogReg_pred_model, test$Target, resolution = 1/100)
+
+GainTable_SVM <- cumGainsTable(SVM_prob[,2], test$Target, resolution = 1/100)
+
+GainTable_RF <- cumGainsTable(RF_prob[,2], test$Target, resolution = 1/100)
+
+plot(GainTable_LogReg[,4], col="red", type="l",    
+xlab="Percentage of data", ylab="Percentage of identified correct target customers")
+lines(GainTable_RF[,4], col="green", type ="l")
+lines(GainTable_SVM[,4], col="blue", type ="l")
+lines(GainTable_nb[,4], col="orange", type ="l")
+grid(NULL, lwd = 1)
+
+legend("bottomright",
+c("LogReg", "SVM", "Random Forest","Naives Bayes"),
+fill=c("red","blue", "green","orange"))
+```
+
+The Cummulative Gain chart showed higher a performance for SVM model with 20% of the data SVM model could explain almost 80% of the Target Customers.
